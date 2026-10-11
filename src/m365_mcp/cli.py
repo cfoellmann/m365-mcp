@@ -54,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
             serve(cfg)
     except ReauthRequired as exc:
         print(f"{exc}: m365-mcp login --config {args.config}", file=sys.stderr)
-        return 2
+        return 3  # nicht 2: damit beendet sich argparse bei Aufruffehlern
     except M365Error as exc:
         print(str(exc), file=sys.stderr)
         return 1

@@ -27,13 +27,19 @@ def test_check_ok(config_path, monkeypatch, capsys):
     assert capsys.readouterr().out.strip() == "OK olivia@example.org"
 
 
-def test_check_reauth_exit_2(config_path, monkeypatch, capsys):
+def test_check_reauth_exit_3(config_path, monkeypatch, capsys):
     def boom(cfg):
         raise ReauthRequired("invalid_grant")
 
     monkeypatch.setattr(cli, "check", boom)
-    assert cli.main(["check", "--config", str(config_path)]) == 2
+    assert cli.main(["check", "--config", str(config_path)]) == 3
     assert f"m365-mcp login --config {config_path}" in capsys.readouterr().err
+
+
+def test_usage_error_is_not_reauth_code():
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["check"])
+    assert exc.value.code == 2
 
 
 def test_bad_config_exit_1(tmp_path, capsys):

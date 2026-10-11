@@ -52,7 +52,7 @@ mensch = "<entra-object-id>"
 
 ## Exit-Codes
 
-`0` ok, `1` Fehler, `2` Neuanmeldung nötig (`m365-mcp login`).
+`0` ok, `1` Fehler, `2` Aufruffehler (argparse), `3` Neuanmeldung nötig (`m365-mcp login`).
 
 ## Installation ohne uv
 

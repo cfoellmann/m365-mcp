@@ -7,6 +7,7 @@ Cache nur unter exklusivem Lock gelesen, erneuert und atomar ersetzt.
 import os
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from functools import partial
 from pathlib import Path
 
 import msal
@@ -127,11 +128,15 @@ class TokenProvider:
         return result["access_token"]
 
 
+# Ohne TTY ist stdout blockgepuffert; ungeflusht erschiene der Device-Code erst nach dem Warten.
+_print_flushed = partial(print, flush=True)
+
+
 def login(
     cfg: Config,
     *,
     app_factory: Callable = msal.PublicClientApplication,
-    echo: Callable[[str], object] = print,
+    echo: Callable[[str], object] = _print_flushed,
 ) -> str:
     """Interaktiv; der Lock wird erst zum Speichern genommen, damit `serve` nicht minutenlang hängt."""
     cache = msal.SerializableTokenCache()

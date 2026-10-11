@@ -97,6 +97,32 @@ def test_login_saves_cache_and_returns_upn(cfg):
     assert "login" in cfg.token_cache.read_text(encoding="utf-8")
 
 
+def test_login_flushes_device_code_message_before_waiting(cfg, monkeypatch):
+    """Ohne TTY ist stdout blockgepuffert; die Meldung muss vor dem Warten auf die Anmeldung raus."""
+
+    class Out:
+        def __init__(self):
+            self.pending, self.flushed = "", ""
+
+        def write(self, s):
+            self.pending += s
+            return len(s)
+
+        def flush(self):
+            self.flushed += self.pending
+            self.pending = ""
+
+    out = Out()
+    monkeypatch.setattr("sys.stdout", out)
+
+    class Waiting(FakeApp):
+        def acquire_token_by_device_flow(self, flow):
+            assert "Code ABC eingeben" in out.flushed
+            return super().acquire_token_by_device_flow(flow)
+
+    login(cfg, app_factory=Waiting)
+
+
 def test_login_with_wrong_account_does_not_save(cfg):
     with pytest.raises(M365Error, match="erwartet olivia@example.org"):
         login(cfg, app_factory=factory(login_user="christian@example.org"), echo=lambda m: None)
