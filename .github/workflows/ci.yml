@@ -1,0 +1,20 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest -q
+      - name: requirements.lock passt zu uv.lock
+        run: |
+          if [ -f requirements.lock ]; then
+            uv export --frozen --no-dev --no-emit-project --format requirements-txt -o requirements.lock
+            git diff --exit-code requirements.lock
+          fi
