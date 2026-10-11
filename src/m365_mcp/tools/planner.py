@@ -42,17 +42,18 @@ def _resolve_assignees(ctx: Ctx, keys: list[str]) -> dict:
 
 
 def planner_tasks(ctx: Ctx, plan: str, include_completed: bool = False) -> dict:
-    """Aufgaben eines freigegebenen Plans; standardmäßig nur offene."""
-    tasks = ctx.graph.get_all(f"/planner/plans/{quote_id(plan_id(ctx.cfg, plan))}/tasks")
+    """Aufgaben eines freigegebenen Plans; standardmäßig nur offene.
+    truncated=true: der Plan hat mehr als 200 Aufgaben (auch erledigte), nur die ersten wurden geprüft."""
+    tasks, truncated = ctx.graph.get_all(f"/planner/plans/{quote_id(plan_id(ctx.cfg, plan))}/tasks")
     if not include_completed:
         tasks = [t for t in tasks if (t.get("percentComplete") or 0) < 100]
-    return {"tasks": [_task(ctx, t) for t in tasks]}
+    return {"tasks": [_task(ctx, t) for t in tasks], "truncated": truncated}
 
 
 def planner_buckets(ctx: Ctx, plan: str) -> dict:
     """Buckets (Spalten) eines freigegebenen Plans."""
-    buckets = ctx.graph.get_all(f"/planner/plans/{quote_id(plan_id(ctx.cfg, plan))}/buckets")
-    return {"buckets": [{"id": b["id"], "name": b.get("name")} for b in buckets]}
+    buckets, truncated = ctx.graph.get_all(f"/planner/plans/{quote_id(plan_id(ctx.cfg, plan))}/buckets")
+    return {"buckets": [{"id": b["id"], "name": b.get("name")} for b in buckets], "truncated": truncated}
 
 
 def planner_create(

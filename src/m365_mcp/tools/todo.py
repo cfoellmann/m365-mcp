@@ -42,7 +42,7 @@ def _tz(ctx: Ctx) -> dict:
 
 def todo_lists(ctx: Ctx) -> dict:
     """Alle eigenen To-Do-Listen."""
-    lists = ctx.graph.get_all("/me/todo/lists")
+    lists, truncated = ctx.graph.get_all("/me/todo/lists")
     return {
         "lists": [
             {
@@ -52,14 +52,17 @@ def todo_lists(ctx: Ctx) -> dict:
                 "is_shared": lst.get("isShared"),
             }
             for lst in lists
-        ]
+        ],
+        "truncated": truncated,
     }
 
 
 def todo_list_tasks(ctx: Ctx, list_id: str, include_completed: bool = False) -> dict:
-    """Aufgaben einer Liste; standardmäßig nur offene."""
+    """Aufgaben einer Liste; standardmäßig nur offene.
+    truncated=true: mehr als 200 Aufgaben, nur die ersten geliefert."""
     params = {} if include_completed else {"$filter": "status ne 'completed'"}
-    return {"tasks": [_task(t) for t in ctx.graph.get_all(_tasks_path(list_id), params=params, headers=_tz(ctx))]}
+    tasks, truncated = ctx.graph.get_all(_tasks_path(list_id), params=params, headers=_tz(ctx))
+    return {"tasks": [_task(t) for t in tasks], "truncated": truncated}
 
 
 def _fields(ctx: Ctx, title: str | None, due: str | None, note: str | None) -> dict:

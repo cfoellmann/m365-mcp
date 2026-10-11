@@ -72,14 +72,15 @@ class GraphClient:
     def get(self, path, params=None, headers=None) -> dict:
         return self.request("GET", path, params=params, headers=headers) or {}
 
-    def get_all(self, path, params=None, headers=None, limit: int = 200) -> list[dict]:
+    def get_all(self, path, params=None, headers=None, limit: int = 200) -> tuple[list[dict], bool]:
+        """Folgt @odata.nextLink bis `limit`. Zweiter Wert: True, wenn es mehr Einträge gab als geliefert."""
         items: list[dict] = []
         page = self.get(path, params=params, headers=headers)
         while True:
             items.extend(page.get("value", []))
             next_link = page.get("@odata.nextLink")
             if len(items) >= limit or not next_link:
-                return items[:limit]
+                return items[:limit], len(items) > limit or bool(next_link)
             page = self.get(next_link, headers=headers)
 
     def post(self, path, json=None, headers=None):

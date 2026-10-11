@@ -38,7 +38,7 @@ def test_tasks_hides_completed_and_maps_assignees(ctx, router):
 
 def test_buckets(ctx, router):
     router.add("GET", "/planner/plans/plan1/buckets", json_body={"value": [{"id": "b1", "name": "Haus"}]})
-    assert planner_buckets(ctx, "familie") == {"buckets": [{"id": "b1", "name": "Haus"}]}
+    assert planner_buckets(ctx, "familie") == {"buckets": [{"id": "b1", "name": "Haus"}], "truncated": False}
 
 
 def test_create_with_assignees(ctx, router):
@@ -90,3 +90,17 @@ def test_create_invalid_due_rejected(ctx, router, due):
     with pytest.raises(PolicyError, match="YYYY-MM-DD"):
         planner_create(ctx, "familie", "Rasen", due=due)
     assert not router.sent("POST", "/planner/tasks")
+
+
+def test_tasks_reports_truncation(ctx, router):
+    router.add(
+        "GET",
+        "/planner/plans/plan1/tasks",
+        json_body={
+            "value": [task(f"t{i}", pct=100) for i in range(200)],
+            "@odata.nextLink": "https://graph.microsoft.com/v1.0/planner/plans/plan1/tasks?$skiptoken=x",
+        },
+    )
+    out = planner_tasks(ctx, "familie")
+    assert out["tasks"] == []
+    assert out["truncated"] is True

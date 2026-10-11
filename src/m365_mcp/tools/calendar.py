@@ -103,10 +103,11 @@ def _guard_existing(ctx: Ctx, calendar: str, root: str, event_id: str) -> None:
 
 
 def calendar_list(ctx: Ctx, calendar: str, start: str, end: str) -> dict:
-    """Termine eines Kalenders im Zeitraum (ISO 8601 ohne Zone, z. B. 2026-10-07T00:00:00)."""
+    """Termine eines Kalenders im Zeitraum (ISO 8601 ohne Zone, z. B. 2026-10-07T00:00:00).
+    truncated=true: mehr als 200 Termine, nur die ersten geliefert – Zeitraum verkleinern."""
     root = calendar_root(ctx.cfg, calendar)
     try:
-        events = ctx.graph.get_all(
+        events, truncated = ctx.graph.get_all(
             f"{root}/calendar/calendarView",
             params={
                 "startDateTime": _with_offset(ctx, start),
@@ -120,7 +121,7 @@ def calendar_list(ctx: Ctx, calendar: str, start: str, end: str) -> dict:
     except GraphError as exc:
         _explain_403(ctx, calendar, exc)
         raise
-    return {"calendar": calendar, "events": [_event(e) for e in events]}
+    return {"calendar": calendar, "events": [_event(e) for e in events], "truncated": truncated}
 
 
 def calendar_create(

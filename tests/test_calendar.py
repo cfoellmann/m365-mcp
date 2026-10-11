@@ -249,3 +249,24 @@ def test_free_busy_403_on_self_is_reraised(ctx, router):
     )
     with pytest.raises(GraphError):
         calendar_free_busy(ctx, ["self"], "2026-10-07T09:00:00", "2026-10-07T10:00:00")
+
+
+def test_list_reports_truncation(ctx, router):
+    router.add(
+        "GET",
+        f"{NINA}/calendar/calendarView",
+        json_body={
+            "value": [event(f"e{i}") for i in range(200)],
+            "@odata.nextLink": f"https://graph.microsoft.com/v1.0{NINA}/calendar/calendarView?$skip=200",
+        },
+    )
+    out = calendar_list(ctx, "nina", "2026-10-07T00:00:00", "2026-10-08T00:00:00")
+    assert len(out["events"]) == 200
+    assert out["truncated"] is True
+    assert len(router.calls) == 1
+
+
+def test_list_not_truncated(ctx, router):
+    router.add("GET", f"{NINA}/calendar/calendarView", json_body={"value": [event("e1")]})
+    out = calendar_list(ctx, "nina", "2026-10-07T00:00:00", "2026-10-08T00:00:00")
+    assert out["truncated"] is False

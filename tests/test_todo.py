@@ -10,7 +10,10 @@ def test_lists(ctx, router):
         "/me/todo/lists",
         json_body={"value": [{"id": "l1", "displayName": "Einkauf", "isOwner": True, "isShared": True}]},
     )
-    assert todo_lists(ctx) == {"lists": [{"id": "l1", "name": "Einkauf", "is_owner": True, "is_shared": True}]}
+    assert todo_lists(ctx) == {
+        "lists": [{"id": "l1", "name": "Einkauf", "is_owner": True, "is_shared": True}],
+        "truncated": False,
+    }
 
 
 def test_open_tasks_filter(ctx, router):
@@ -64,3 +67,17 @@ def test_due_must_be_strict_iso_date(ctx, router):
     with pytest.raises(PolicyError, match="YYYY-MM-DD"):
         todo_create(ctx, "l1", "x", due="20261008")
     assert not router.sent("POST", "/me/todo/lists/l1/tasks")
+
+
+def test_tasks_reports_truncation(ctx, router):
+    router.add(
+        "GET",
+        "/me/todo/lists/l1/tasks",
+        json_body={
+            "value": [{"id": f"t{i}", "title": "x", "status": "notStarted"} for i in range(200)],
+            "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/todo/lists/l1/tasks?$skip=200",
+        },
+    )
+    out = todo_list_tasks(ctx, "l1")
+    assert len(out["tasks"]) == 200
+    assert out["truncated"] is True

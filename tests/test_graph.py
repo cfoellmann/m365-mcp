@@ -97,7 +97,9 @@ def test_get_all_follows_next_link(router):
         },
     )
     router.add("GET", "/me/todo/lists", json_body={"value": [{"id": "2"}]})
-    assert [i["id"] for i in client(router).get_all("/me/todo/lists")] == ["1", "2"]
+    items, truncated = client(router).get_all("/me/todo/lists")
+    assert [i["id"] for i in items] == ["1", "2"]
+    assert truncated is False
 
 
 def test_get_all_respects_limit(router):
@@ -109,8 +111,31 @@ def test_get_all_respects_limit(router):
             "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/todo/lists?n=2",
         },
     )
-    assert len(client(router).get_all("/me/todo/lists", limit=3)) == 3
+    items, truncated = client(router).get_all("/me/todo/lists", limit=3)
+    assert len(items) == 3
+    assert truncated is True
     assert len(router.calls) == 1
+
+
+def test_get_all_exactly_limit_without_next_link_is_not_truncated(router):
+    router.add("GET", "/me/todo/lists", json_body={"value": [{"id": str(i)} for i in range(3)]})
+    items, truncated = client(router).get_all("/me/todo/lists", limit=3)
+    assert len(items) == 3
+    assert truncated is False
+
+
+def test_get_all_full_page_with_next_link_is_truncated(router):
+    router.add(
+        "GET",
+        "/me/todo/lists",
+        json_body={
+            "value": [{"id": str(i)} for i in range(3)],
+            "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/todo/lists?n=2",
+        },
+    )
+    items, truncated = client(router).get_all("/me/todo/lists", limit=3)
+    assert len(items) == 3
+    assert truncated is True
 
 
 def test_quote_id():
