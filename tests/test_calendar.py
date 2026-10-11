@@ -46,7 +46,7 @@ def test_list_rejects_invalid_time(ctx, router):
 
 def test_unknown_calendar_rejected_without_call(ctx, router):
     with pytest.raises(PolicyError):
-        calendar_list(ctx, "fremd@example.org", "a", "b")
+        calendar_list(ctx, "fremd@example.org", "2026-10-07T09:00:00", "2026-10-07T10:00:00")
     assert router.calls == []
 
 
@@ -73,19 +73,21 @@ def test_create_foreign_without_attendees(ctx, router):
 
 def test_create_foreign_with_attendees_rejected(ctx, router):
     with pytest.raises(PolicyError, match="fremden Kalendern"):
-        calendar_create(ctx, "nina", "X", "a", "b", attendees=["christian@example.org"])
+        calendar_create(
+            ctx, "nina", "X", "2026-10-07T09:00:00", "2026-10-07T10:00:00", attendees=["christian@example.org"]
+        )
     assert router.calls == []
 
 
 def test_create_self_with_internal_attendee(ctx, router):
     router.add("POST", "/me/calendar/events", json_body=event("e1", ["nina@example.org"]))
-    calendar_create(ctx, "self", "X", "a", "b", attendees=["nina@example.org"])
+    calendar_create(ctx, "self", "X", "2026-10-07T09:00:00", "2026-10-07T10:00:00", attendees=["nina@example.org"])
     assert router.calls[0][2]["attendees"] == [att("nina@example.org")]
 
 
 def test_create_self_with_external_attendee_rejected(ctx, router):
     with pytest.raises(PolicyError, match="Externe Teilnehmer"):
-        calendar_create(ctx, "self", "X", "a", "b", attendees=["x@extern.example"])
+        calendar_create(ctx, "self", "X", "2026-10-07T09:00:00", "2026-10-07T10:00:00", attendees=["x@extern.example"])
     assert router.calls == []
 
 
@@ -166,7 +168,7 @@ def test_free_busy_maps_keys(ctx, router):
             ]
         },
     )
-    out = calendar_free_busy(ctx, ["self", "nina"], "a", "b")
+    out = calendar_free_busy(ctx, ["self", "nina"], "2026-10-07T09:00:00", "2026-10-07T10:00:00")
     assert router.calls[0][2]["schedules"] == ["olivia@example.org", "nina@example.org"]
     assert [s["calendar"] for s in out["schedules"]] == ["self", "nina"]
     assert out["schedules"][1]["busy"] == [{"start": "s", "end": "e", "status": "busy"}]
@@ -174,4 +176,40 @@ def test_free_busy_maps_keys(ctx, router):
 
 def test_free_busy_unknown_key_rejected(ctx, router):
     with pytest.raises(PolicyError):
-        calendar_free_busy(ctx, ["boss"], "a", "b")
+        calendar_free_busy(ctx, ["boss"], "2026-10-07T09:00:00", "2026-10-07T10:00:00")
+
+
+def test_list_rejects_zoned_time(ctx, router):
+    with pytest.raises(PolicyError, match="ISO 8601"):
+        calendar_list(ctx, "self", "2026-10-07T09:00:00+02:00", "2026-10-08T00:00:00")
+    assert router.calls == []
+
+
+def test_create_rejects_zoned_time(ctx, router):
+    with pytest.raises(PolicyError, match="ISO 8601"):
+        calendar_create(ctx, "self", "X", "2026-10-07T09:00:00+02:00", "2026-10-07T10:00:00")
+    assert router.calls == []
+
+
+def test_update_rejects_zoned_time(ctx, router):
+    with pytest.raises(PolicyError, match="ISO 8601"):
+        calendar_update(ctx, "self", "e1", start="2026-10-07T09:00:00+02:00")
+    assert router.calls == []
+
+
+def test_free_busy_rejects_zoned_time(ctx, router):
+    with pytest.raises(PolicyError, match="ISO 8601"):
+        calendar_free_busy(ctx, ["self"], "2026-10-07T09:00:00+02:00", "2026-10-07T10:00:00")
+    assert router.calls == []
+
+
+def test_create_rejects_invalid_time(ctx, router):
+    with pytest.raises(PolicyError, match="ISO 8601"):
+        calendar_create(ctx, "self", "X", "morgen", "2026-10-07T10:00:00")
+    assert router.calls == []
+
+
+def test_free_busy_rejects_invalid_time(ctx, router):
+    with pytest.raises(PolicyError, match="ISO 8601"):
+        calendar_free_busy(ctx, ["self"], "morgen", "2026-10-07T10:00:00")
+    assert router.calls == []

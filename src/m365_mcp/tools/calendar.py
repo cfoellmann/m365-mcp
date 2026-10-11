@@ -27,18 +27,28 @@ def _tz(ctx: Ctx) -> dict:
     return {"Prefer": f'outlook.timezone="{ctx.cfg.timezone}"'}
 
 
+def _local(ctx: Ctx, value: str) -> datetime.datetime:
+    """Zeitangabe prüfen: ISO 8601 ohne Zone. Mit Zone oder ungültig → PolicyError, vor jedem Graph-Aufruf."""
+    try:
+        moment = datetime.datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise PolicyError(f"Zeitangabe {value!r} ungültig, erwartet ISO 8601 ohne Zone (2026-10-07T09:00:00)") from exc
+    if moment.tzinfo is not None:
+        raise PolicyError(
+            f"Zeitangabe {value!r} enthält eine Zone; erwartet ISO 8601 ohne Zone "
+            f"(2026-10-07T09:00:00), interpretiert in {ctx.cfg.timezone}"
+        )
+    return moment
+
+
 def _when(ctx: Ctx, value: str) -> dict:
+    _local(ctx, value)
     return {"dateTime": value, "timeZone": ctx.cfg.timezone}
 
 
 def _with_offset(ctx: Ctx, value: str) -> str:
     """calendarView liest Zeiten ohne Offset als UTC; Prefer: outlook.timezone wirkt nur auf die Antwort."""
-    try:
-        moment = datetime.datetime.fromisoformat(value)
-    except ValueError as exc:
-        raise PolicyError(f"Zeitangabe {value!r} ungültig, erwartet ISO 8601 (2026-10-07T09:00:00)") from exc
-    if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=zoneinfo.ZoneInfo(ctx.cfg.timezone))
+    moment = _local(ctx, value).replace(tzinfo=zoneinfo.ZoneInfo(ctx.cfg.timezone))
     return moment.isoformat()
 
 
@@ -162,6 +172,9 @@ def calendar_update(
 ) -> dict:
     """Termin ändern. Nicht angegebene Felder bleiben. Termine mit Teilnehmern in fremden Kalendern sind tabu."""
     root = calendar_root(ctx.cfg, calendar)
+    for value in (start, end):
+        if value is not None:
+            _local(ctx, value)
     attendees_ = clean_addresses(attendees, "attendees") if attendees is not None else None
     _check_new_attendees(ctx, calendar, attendees_ or [])
     _guard_existing(ctx, calendar, root, event_id)
@@ -202,6 +215,8 @@ def calendar_delete(ctx: Ctx, calendar: str, event_id: str) -> dict:
 
 def calendar_free_busy(ctx: Ctx, calendars: list[str], start: str, end: str, interval_minutes: int = 30) -> dict:
     """Frei/Gebucht für self und freigegebene Kalender im Zeitraum."""
+    _local(ctx, start)
+    _local(ctx, end)
     keys = list(calendars)
     addresses = [calendar_address(ctx.cfg, k) for k in keys]
     data = (
