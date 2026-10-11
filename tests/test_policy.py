@@ -94,3 +94,11 @@ def test_plan_and_assignee_resolution(cfg):
         plan_id(cfg, "andere")
     with pytest.raises(PolicyError):
         assignee_id(cfg, "nina")
+
+
+def test_external_policy_deduplicates_within_external_cc(cfg):
+    import dataclasses
+
+    cfg2 = dataclasses.replace(cfg, external_cc=("chef@example.org", "CHEF@example.org"))
+    new_cc, _, _ = apply_external_mail_policy(cfg2, ["x@extern.example"], [], [])
+    assert [a.lower() for a in new_cc] == ["chef@example.org"]

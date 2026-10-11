@@ -98,6 +98,7 @@ def test_reply_to_external_sets_policy_before_send(ctx, router):
     assert router.calls[0][2] == {"comment": "Danke"}
     patch = router.calls[1][2]
     assert patch["replyTo"] == [{"emailAddress": {"address": "chef@example.org"}}]
+    assert {"emailAddress": {"address": "chef@example.org"}} in patch["ccRecipients"]
     assert out["policy_applied"] == ["reply_to", "cc"]
     assert not router.sent("POST", "/me/messages/m1/reply")
 

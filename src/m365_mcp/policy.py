@@ -41,7 +41,11 @@ def apply_external_mail_policy(
     if all(is_internal(a, cfg.internal_domains) for a in [*to, *cc, *bcc]):
         return cc, None, []
     present = {a.lower() for a in cc}
-    new_cc = cc + [a for a in cfg.external_cc if a.lower() not in present]
+    new_cc = list(cc)
+    for a in cfg.external_cc:
+        if a.lower() not in present:
+            present.add(a.lower())
+            new_cc.append(a)
     return new_cc, [cfg.reply_to], ["reply_to", "cc"]
 
 
