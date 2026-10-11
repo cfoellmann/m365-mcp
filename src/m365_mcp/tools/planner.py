@@ -51,7 +51,7 @@ def planner_tasks(ctx: Ctx, plan: str, include_completed: bool = False) -> dict:
 
 
 def planner_buckets(ctx: Ctx, plan: str) -> dict:
-    """Buckets (Spalten) eines freigegebenen Plans."""
+    """Buckets (Spalten) eines freigegebenen Plans. truncated=true: mehr als 200 Buckets, nur die ersten geliefert."""
     buckets, truncated = ctx.graph.get_all(f"/planner/plans/{quote_id(plan_id(ctx.cfg, plan))}/buckets")
     return {"buckets": [{"id": b["id"], "name": b.get("name")} for b in buckets], "truncated": truncated}
 

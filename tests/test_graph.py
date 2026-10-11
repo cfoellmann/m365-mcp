@@ -140,3 +140,19 @@ def test_get_all_full_page_with_next_link_is_truncated(router):
 
 def test_quote_id():
     assert quote_id("AAMk/a+b=") == "AAMk%2Fa%2Bb%3D"
+
+
+def test_get_all_overshoot_on_later_page_is_truncated(router):
+    router.add(
+        "GET",
+        "/me/todo/lists",
+        json_body={
+            "value": [{"id": "1"}, {"id": "2"}],
+            "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/todo/lists?$skiptoken=x",
+        },
+    )
+    router.add("GET", "/me/todo/lists", json_body={"value": [{"id": "3"}, {"id": "4"}]})
+    items, truncated = client(router).get_all("/me/todo/lists", limit=3)
+    assert [i["id"] for i in items] == ["1", "2", "3"]
+    assert truncated is True
+    assert len(router.calls) == 2

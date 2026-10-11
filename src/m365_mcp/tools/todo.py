@@ -41,7 +41,7 @@ def _tz(ctx: Ctx) -> dict:
 
 
 def todo_lists(ctx: Ctx) -> dict:
-    """Alle eigenen To-Do-Listen."""
+    """Alle eigenen To-Do-Listen. truncated=true: mehr als 200 Listen, nur die ersten geliefert."""
     lists, truncated = ctx.graph.get_all("/me/todo/lists")
     return {
         "lists": [
