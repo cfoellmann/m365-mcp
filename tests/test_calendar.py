@@ -1,6 +1,6 @@
 import pytest
 
-from m365_mcp.errors import PolicyError
+from m365_mcp.errors import GraphError, PolicyError
 from m365_mcp.tools.calendar import (
     calendar_create,
     calendar_delete,
@@ -213,3 +213,39 @@ def test_free_busy_rejects_invalid_time(ctx, router):
     with pytest.raises(PolicyError, match="ISO 8601"):
         calendar_free_busy(ctx, ["self"], "morgen", "2026-10-07T10:00:00")
     assert router.calls == []
+
+
+def test_create_all_day_date_only_is_normalized(ctx, router):
+    router.add("POST", "/me/calendar/events", json_body=event("e1"))
+    calendar_create(ctx, "self", "Urlaub", "2026-10-07", "2026-10-08", all_day=True)
+    payload = router.calls[0][2]
+    assert payload["start"]["dateTime"] == "2026-10-07T00:00:00"
+    assert payload["end"]["dateTime"] == "2026-10-08T00:00:00"
+
+
+def test_update_rejects_invalid_time(ctx, router):
+    with pytest.raises(PolicyError, match="ISO 8601"):
+        calendar_update(ctx, "self", "e1", start="morgen")
+    assert router.calls == []
+
+
+def test_free_busy_403_on_foreign_calendar_is_explained(ctx, router):
+    router.add(
+        "POST",
+        "/me/calendar/getSchedule",
+        status=403,
+        json_body={"error": {"code": "ErrorAccessDenied", "message": "x"}},
+    )
+    with pytest.raises(PolicyError, match="nicht freigegeben"):
+        calendar_free_busy(ctx, ["self", "nina"], "2026-10-07T09:00:00", "2026-10-07T10:00:00")
+
+
+def test_free_busy_403_on_self_is_reraised(ctx, router):
+    router.add(
+        "POST",
+        "/me/calendar/getSchedule",
+        status=403,
+        json_body={"error": {"code": "ErrorAccessDenied", "message": "x"}},
+    )
+    with pytest.raises(GraphError):
+        calendar_free_busy(ctx, ["self"], "2026-10-07T09:00:00", "2026-10-07T10:00:00")

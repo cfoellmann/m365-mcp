@@ -42,8 +42,7 @@ def _local(ctx: Ctx, value: str) -> datetime.datetime:
 
 
 def _when(ctx: Ctx, value: str) -> dict:
-    _local(ctx, value)
-    return {"dateTime": value, "timeZone": ctx.cfg.timezone}
+    return {"dateTime": _local(ctx, value).isoformat(), "timeZone": ctx.cfg.timezone}
 
 
 def _with_offset(ctx: Ctx, value: str) -> str:
@@ -219,19 +218,27 @@ def calendar_free_busy(ctx: Ctx, calendars: list[str], start: str, end: str, int
     _local(ctx, end)
     keys = list(calendars)
     addresses = [calendar_address(ctx.cfg, k) for k in keys]
-    data = (
-        ctx.graph.post(
-            "/me/calendar/getSchedule",
-            json={
-                "schedules": addresses,
-                "startTime": _when(ctx, start),
-                "endTime": _when(ctx, end),
-                "availabilityViewInterval": int(interval_minutes),
-            },
-            headers=_tz(ctx),
+    try:
+        data = (
+            ctx.graph.post(
+                "/me/calendar/getSchedule",
+                json={
+                    "schedules": addresses,
+                    "startTime": _when(ctx, start),
+                    "endTime": _when(ctx, end),
+                    "availabilityViewInterval": int(interval_minutes),
+                },
+                headers=_tz(ctx),
+            )
+            or {}
         )
-        or {}
-    )
+    except GraphError as exc:
+        foreign = [k for k in keys if k != "self"]
+        if exc.status == 403 and foreign:
+            raise PolicyError(
+                f"Kalender {', '.join(map(repr, foreign))} ist für {ctx.cfg.account} nicht freigegeben"
+            ) from exc
+        raise
     by_address = {s.get("scheduleId", "").lower(): s for s in data.get("value", [])}
     schedules = []
     for key, address in zip(keys, addresses, strict=True):
