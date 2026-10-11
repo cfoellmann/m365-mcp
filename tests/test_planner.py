@@ -83,3 +83,10 @@ def test_complete_sets_100(ctx, router):
     router.add("PATCH", "/planner/tasks/t1", status=204)
     planner_complete(ctx, "familie", "t1")
     assert router.sent("PATCH", "/planner/tasks/t1")[0][2] == {"percentComplete": 100}
+
+
+@pytest.mark.parametrize("due", ["", "20261008"])
+def test_create_invalid_due_rejected(ctx, router, due):
+    with pytest.raises(PolicyError, match="YYYY-MM-DD"):
+        planner_create(ctx, "familie", "Rasen", due=due)
+    assert not router.sent("POST", "/planner/tasks")

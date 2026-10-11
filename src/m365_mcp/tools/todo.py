@@ -1,14 +1,20 @@
 """Microsoft To Do: nur Olivias eigene bzw. für sie sichtbare Listen (/me/todo)."""
 
 import datetime
+import re
 
 from m365_mcp.context import Ctx
 from m365_mcp.errors import PolicyError
 from m365_mcp.graph import quote_id
 
+_ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
 
 def parse_due(due: str) -> str:
+    # date.fromisoformat akzeptiert auch 20261008; erlaubt ist nur die Form YYYY-MM-DD.
     try:
+        if not _ISO_DATE.fullmatch(due):
+            raise ValueError(due)
         return datetime.date.fromisoformat(due).isoformat()
     except ValueError as exc:
         raise PolicyError(f"Fälligkeitsdatum {due!r} ungültig, erwartet YYYY-MM-DD") from exc

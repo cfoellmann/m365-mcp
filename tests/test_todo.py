@@ -58,3 +58,9 @@ def test_update_and_complete(ctx, router):
 def test_update_without_fields_rejected(ctx):
     with pytest.raises(PolicyError, match="nichts"):
         todo_update(ctx, "l1", "t1")
+
+
+def test_due_must_be_strict_iso_date(ctx, router):
+    with pytest.raises(PolicyError, match="YYYY-MM-DD"):
+        todo_create(ctx, "l1", "x", due="20261008")
+    assert not router.sent("POST", "/me/todo/lists/l1/tasks")

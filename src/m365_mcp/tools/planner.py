@@ -67,7 +67,7 @@ def planner_create(
     payload: dict = {"planId": plan_id(ctx.cfg, plan), "title": title}
     if bucket_id:
         payload["bucketId"] = bucket_id
-    if due:
+    if due is not None:
         payload["dueDateTime"] = f"{parse_due(due)}T00:00:00Z"
     if assignees:
         payload["assignments"] = _resolve_assignees(ctx, assignees)
