@@ -1,4 +1,4 @@
-"""Mail-Werkzeuge. Nur Olivias eigenes Postfach (/me)."""
+"""Mail-Werkzeuge. Nur das eigene Postfach des Agenten (/me)."""
 
 from m365_mcp.context import Ctx
 from m365_mcp.errors import GraphError, M365Error, PolicyError
@@ -77,7 +77,7 @@ def mail_send(
     cc: list[str] | None = None,
     bcc: list[str] | None = None,
 ) -> dict:
-    """Neue Mail aus Olivias Postfach senden. Bei externen Empfängern setzt der Server Reply-To und CC."""
+    """Neue Mail aus dem eigenen Postfach senden. Bei externen Empfängern setzt der Server Reply-To und CC."""
     to_ = clean_addresses(to, "to")
     cc_ = clean_addresses(cc, "cc")
     bcc_ = clean_addresses(bcc, "bcc")

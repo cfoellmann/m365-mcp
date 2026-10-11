@@ -1,4 +1,4 @@
-"""Microsoft To Do: nur Olivias eigene bzw. für sie sichtbare Listen (/me/todo)."""
+"""Microsoft To Do: nur eigene bzw. für den Agenten sichtbare Listen (/me/todo)."""
 
 import datetime
 import re
@@ -41,7 +41,7 @@ def _tz(ctx: Ctx) -> dict:
 
 
 def todo_lists(ctx: Ctx) -> dict:
-    """Alle To-Do-Listen von Olivia."""
+    """Alle eigenen To-Do-Listen."""
     lists = ctx.graph.get_all("/me/todo/lists")
     return {
         "lists": [
