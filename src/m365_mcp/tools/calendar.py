@@ -17,6 +17,7 @@ from m365_mcp.policy import (
     calendar_root,
     check_attendees_internal,
     clean_addresses,
+    config_key,
     is_internal,
 )
 
@@ -105,6 +106,7 @@ def _guard_existing(ctx: Ctx, calendar: str, root: str, event_id: str) -> None:
 def calendar_list(ctx: Ctx, calendar: str, start: str, end: str) -> dict:
     """Termine eines Kalenders im Zeitraum (ISO 8601 ohne Zone, z. B. 2026-10-07T00:00:00).
     truncated=true: mehr als 200 Termine, nur die ersten geliefert – Zeitraum verkleinern."""
+    calendar = config_key(calendar)
     root = calendar_root(ctx.cfg, calendar)
     try:
         events, truncated = ctx.graph.get_all(
@@ -136,6 +138,7 @@ def calendar_create(
     all_day: bool = False,
 ) -> dict:
     """Termin anlegen. Teilnehmer nur im eigenen Kalender (self) und nur interne."""
+    calendar = config_key(calendar)
     root = calendar_root(ctx.cfg, calendar)
     attendees_ = clean_addresses(attendees, "attendees")
     _check_new_attendees(ctx, calendar, attendees_)
@@ -171,6 +174,7 @@ def calendar_update(
     attendees: list[str] | None = None,
 ) -> dict:
     """Termin ändern. Nicht angegebene Felder bleiben. Termine mit Teilnehmern in fremden Kalendern sind tabu."""
+    calendar = config_key(calendar)
     root = calendar_root(ctx.cfg, calendar)
     for value in (start, end):
         if value is not None:
@@ -203,6 +207,7 @@ def calendar_update(
 
 def calendar_delete(ctx: Ctx, calendar: str, event_id: str) -> dict:
     """Termin löschen. Termine mit Teilnehmern in fremden Kalendern sind tabu."""
+    calendar = config_key(calendar)
     root = calendar_root(ctx.cfg, calendar)
     _guard_existing(ctx, calendar, root, event_id)
     try:
@@ -217,7 +222,7 @@ def calendar_free_busy(ctx: Ctx, calendars: list[str], start: str, end: str, int
     """Frei/Gebucht für self und freigegebene Kalender im Zeitraum."""
     _local(ctx, start)
     _local(ctx, end)
-    keys = list(calendars)
+    keys = [config_key(k) for k in calendars]
     addresses = [calendar_address(ctx.cfg, k) for k in keys]
     try:
         data = (

@@ -1,10 +1,26 @@
 """Planner: nur Pläne aus [planner.plans]. Auch Aufgaben-IDs werden gegen den Plan geprüft."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 from m365_mcp.context import Ctx
-from m365_mcp.errors import PolicyError
+from m365_mcp.errors import GraphError, PolicyError
 from m365_mcp.graph import quote_id
-from m365_mcp.policy import assignee_id, plan_id
+from m365_mcp.policy import assignee_id, config_key, plan_id
 from m365_mcp.tools.todo import parse_due
+
+
+@contextmanager
+def _explain_403(ctx: Ctx) -> Iterator[None]:
+    """Häufigste Ursache: Konto ist nur Besitzer der Gruppe des Plans – Planner verlangt Mitgliedschaft."""
+    try:
+        yield
+    except GraphError as exc:
+        if exc.status == 403:
+            raise PolicyError(
+                f"{exc}: ist {ctx.cfg.account} Mitglied der Gruppe des Plans? Besitz allein reicht nicht"
+            ) from exc
+        raise
 
 
 def _assignee_keys(ctx: Ctx, assignments: dict) -> list[str]:
@@ -34,7 +50,7 @@ def _task_in_plan(ctx: Ctx, plan: str, task_id: str) -> dict:
 def _resolve_assignees(ctx: Ctx, keys: list[str]) -> dict:
     ids = []
     for key in keys:
-        if key == "self":
+        if config_key(key) == "self":
             ids.append(ctx.graph.get("/me", params={"$select": "id"})["id"])
         else:
             ids.append(assignee_id(ctx.cfg, key))
@@ -44,7 +60,8 @@ def _resolve_assignees(ctx: Ctx, keys: list[str]) -> dict:
 def planner_tasks(ctx: Ctx, plan: str, include_completed: bool = False) -> dict:
     """Aufgaben eines freigegebenen Plans; standardmäßig nur offene.
     truncated=true: der Plan hat mehr als 200 Aufgaben (auch erledigte), nur die ersten wurden geprüft."""
-    tasks, truncated = ctx.graph.get_all(f"/planner/plans/{quote_id(plan_id(ctx.cfg, plan))}/tasks")
+    with _explain_403(ctx):
+        tasks, truncated = ctx.graph.get_all(f"/planner/plans/{quote_id(plan_id(ctx.cfg, plan))}/tasks")
     if not include_completed:
         tasks = [t for t in tasks if (t.get("percentComplete") or 0) < 100]
     return {"tasks": [_task(ctx, t) for t in tasks], "truncated": truncated}
@@ -52,7 +69,8 @@ def planner_tasks(ctx: Ctx, plan: str, include_completed: bool = False) -> dict:
 
 def planner_buckets(ctx: Ctx, plan: str) -> dict:
     """Buckets (Spalten) eines freigegebenen Plans. truncated=true: mehr als 200 Buckets, nur die ersten geliefert."""
-    buckets, truncated = ctx.graph.get_all(f"/planner/plans/{quote_id(plan_id(ctx.cfg, plan))}/buckets")
+    with _explain_403(ctx):
+        buckets, truncated = ctx.graph.get_all(f"/planner/plans/{quote_id(plan_id(ctx.cfg, plan))}/buckets")
     return {"buckets": [{"id": b["id"], "name": b.get("name")} for b in buckets], "truncated": truncated}
 
 
@@ -72,7 +90,8 @@ def planner_create(
         payload["dueDateTime"] = f"{parse_due(due)}T00:00:00Z"
     if assignees:
         payload["assignments"] = _resolve_assignees(ctx, assignees)
-    created = ctx.graph.post("/planner/tasks", json=payload)
+    with _explain_403(ctx):
+        created = ctx.graph.post("/planner/tasks", json=payload)
     return {"created": _task(ctx, created or {})}
 
 
@@ -94,17 +113,19 @@ def planner_update(
         payload["bucketId"] = bucket_id
     if not payload:
         raise PolicyError("nichts zu ändern")
-    t = _task_in_plan(ctx, plan, task_id)
-    ctx.graph.patch(f"/planner/tasks/{quote_id(task_id)}", json=payload, headers={"If-Match": t["@odata.etag"]})
+    with _explain_403(ctx):
+        t = _task_in_plan(ctx, plan, task_id)
+        ctx.graph.patch(f"/planner/tasks/{quote_id(task_id)}", json=payload, headers={"If-Match": t["@odata.etag"]})
     return {"updated": True}
 
 
 def planner_complete(ctx: Ctx, plan: str, task_id: str) -> dict:
     """Aufgabe als erledigt markieren (100 %)."""
-    t = _task_in_plan(ctx, plan, task_id)
-    ctx.graph.patch(
-        f"/planner/tasks/{quote_id(task_id)}", json={"percentComplete": 100}, headers={"If-Match": t["@odata.etag"]}
-    )
+    with _explain_403(ctx):
+        t = _task_in_plan(ctx, plan, task_id)
+        ctx.graph.patch(
+            f"/planner/tasks/{quote_id(task_id)}", json={"percentComplete": 100}, headers={"If-Match": t["@odata.etag"]}
+        )
     return {"completed": True}
 
 

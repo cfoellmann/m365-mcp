@@ -270,3 +270,15 @@ def test_list_not_truncated(ctx, router):
     router.add("GET", f"{NINA}/calendar/calendarView", json_body={"value": [event("e1")]})
     out = calendar_list(ctx, "nina", "2026-10-07T00:00:00", "2026-10-08T00:00:00")
     assert out["truncated"] is False
+
+
+def test_self_key_ignores_case(ctx, router):
+    router.add("POST", "/me/calendar/events", json_body=event("e1", ["nina@example.org"]))
+    calendar_create(ctx, " Self ", "X", "2026-10-07T09:00:00", "2026-10-07T10:00:00", attendees=["nina@example.org"])
+    assert router.calls[0][2]["attendees"] == [att("nina@example.org")]
+
+
+def test_free_busy_keys_ignore_case(ctx, router):
+    router.add("POST", "/me/calendar/getSchedule", json_body={"value": []})
+    out = calendar_free_busy(ctx, ["Self", "NINA"], "2026-10-07T08:00:00", "2026-10-07T18:00:00")
+    assert [s["calendar"] for s in out["schedules"]] == ["self", "nina"]

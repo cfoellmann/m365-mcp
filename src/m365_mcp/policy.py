@@ -58,28 +58,36 @@ def check_attendees_internal(cfg: Config, attendees: list[str]) -> None:
         )
 
 
+def config_key(key: str) -> str:
+    """Schlüssel in der Konfiguration sind a-z0-9; das Modell nimmt oft den Anzeigenamen („Haushalt“)."""
+    return key.strip().lower()
+
+
 def calendar_address(cfg: Config, key: str) -> str:
-    if key == "self":
+    k = config_key(key)
+    if k == "self":
         return cfg.account
-    if key in cfg.calendars:
-        return cfg.calendars[key]
+    if k in cfg.calendars:
+        return cfg.calendars[k]
     allowed = ", ".join(["self", *cfg.calendars])
     raise PolicyError(f"Kalender {key!r} ist nicht freigegeben; erlaubt: {allowed}")
 
 
 def calendar_root(cfg: Config, key: str) -> str:
     address = calendar_address(cfg, key)
-    return "/me" if key == "self" else f"/users/{address}"
+    return "/me" if config_key(key) == "self" else f"/users/{address}"
 
 
 def plan_id(cfg: Config, key: str) -> str:
-    if key in cfg.plans:
-        return cfg.plans[key]
+    k = config_key(key)
+    if k in cfg.plans:
+        return cfg.plans[k]
     raise PolicyError(f"Plan {key!r} ist nicht freigegeben; erlaubt: {', '.join(cfg.plans)}")
 
 
 def assignee_id(cfg: Config, key: str) -> str:
-    if key in cfg.assignees:
-        return cfg.assignees[key]
+    k = config_key(key)
+    if k in cfg.assignees:
+        return cfg.assignees[k]
     allowed = ", ".join(["self", *cfg.assignees])
     raise PolicyError(f"Zuweisung an {key!r} nicht möglich; erlaubt: {allowed}")

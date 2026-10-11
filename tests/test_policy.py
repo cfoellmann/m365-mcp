@@ -102,3 +102,12 @@ def test_external_policy_deduplicates_within_external_cc(cfg):
     cfg2 = dataclasses.replace(cfg, external_cc=("chef@example.org", "CHEF@example.org"))
     new_cc, _, _ = apply_external_mail_policy(cfg2, ["x@extern.example"], [], [])
     assert [a.lower() for a in new_cc] == ["chef@example.org"]
+
+
+def test_keys_ignore_case_and_whitespace(cfg):
+    assert plan_id(cfg, " Familie ") == "plan1"
+    assert assignee_id(cfg, "CHRISTIAN") == "uid-c"
+    assert calendar_address(cfg, "Christian") == "christian@example.org"
+    assert calendar_root(cfg, " SELF ") == "/me"
+    with pytest.raises(PolicyError, match="'Andere'"):
+        plan_id(cfg, "Andere")

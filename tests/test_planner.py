@@ -104,3 +104,23 @@ def test_tasks_reports_truncation(ctx, router):
     out = planner_tasks(ctx, "familie")
     assert out["tasks"] == []
     assert out["truncated"] is True
+
+
+def test_plan_and_assignee_keys_ignore_case(ctx, router):
+    router.add("GET", "/me", json_body={"id": "uid-o"})
+    router.add("POST", "/planner/tasks", json_body=task("t1"))
+    planner_create(ctx, "Familie", "Rasen", assignees=["CHRISTIAN", " Self "])
+    payload = router.sent("POST", "/planner/tasks")[0][2]
+    assert payload["planId"] == "plan1"
+    assert set(payload["assignments"]) == {"uid-c", "uid-o"}
+
+
+def test_403_hints_at_group_membership(ctx, router):
+    router.add(
+        "GET",
+        "/planner/plans/plan1/tasks",
+        status=403,
+        json_body={"error": {"code": "Forbidden", "message": "x"}},
+    )
+    with pytest.raises(PolicyError, match="Mitglied der Gruppe"):
+        planner_tasks(ctx, "familie")
