@@ -24,6 +24,13 @@ class GraphError(M365Error):
     """Graph hat mit einem Fehlerstatus geantwortet."""
 
     def __init__(self, status: int, code: str, message: str) -> None:
-        super().__init__(f"Graph {status} {code}: {message}")
+        # Der Rohtext von Graph (kann Adressen, Betreffs, URLs enthalten) bleibt im Attribut und
+        # geht nie in str(exc), also nie an das Modell.
+        if code == "transport":
+            text = "Graph-Verbindungsfehler, Ergebnis unklar – nicht automatisch wiederholen"
+        else:
+            text = f"Graph {status} {code}"
+        super().__init__(text)
         self.status = status
         self.code = code
+        self.message = message

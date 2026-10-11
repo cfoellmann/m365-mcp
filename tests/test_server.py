@@ -84,3 +84,16 @@ def test_no_addresses_in_logs(ctx, router, caplog):
             )
     shown = [r for r in caplog.records if r.levelno >= logging.getLogger(r.name).getEffectiveLevel()]
     assert not any("@" in r.getMessage() for r in shown)
+
+
+def test_graph_error_text_does_not_leak_message(ctx, router):
+    router.add(
+        "GET",
+        "/me/todo/lists",
+        status=403,
+        json_body={"error": {"code": "ErrorAccessDenied", "message": "Zugriff für geheim@example.org verweigert"}},
+    )
+    with pytest.raises(ToolError) as exc:
+        asyncio.run(build_server(ctx).call_tool("todo_lists", {}))
+    assert "403" in str(exc.value) and "ErrorAccessDenied" in str(exc.value)
+    assert "geheim@example.org" not in str(exc.value)

@@ -55,9 +55,7 @@ class GraphClient:
             try:
                 response = self._http.request(method, path, params=params, json=json, headers=merged)
             except httpx.TransportError as exc:
-                raise GraphError(
-                    0, "transport", f"Verbindungsfehler, Ergebnis unklar – nicht automatisch wiederholen ({exc})"
-                ) from exc
+                raise GraphError(0, "transport", type(exc).__name__) from exc
             if response.status_code in retry_on and attempt < self._max_retries:
                 self._sleep(_retry_after(response))
                 continue
