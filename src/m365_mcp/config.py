@@ -2,6 +2,7 @@
 
 import re
 import tomllib
+import zoneinfo
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -103,6 +104,15 @@ def load_config(path: Path) -> Config:
     if not isinstance(max_body, int) or isinstance(max_body, bool) or max_body <= 0:
         raise ConfigError("max_body_chars muss eine positive Zahl sein")
 
+    timezone = raw.get("timezone", "Europe/Berlin")
+    if not isinstance(timezone, str) or not timezone.strip():
+        raise ConfigError("timezone muss ein nicht leerer IANA-Zonenname sein")
+    timezone = timezone.strip()
+    try:
+        zoneinfo.ZoneInfo(timezone)
+    except (zoneinfo.ZoneInfoNotFoundError, ValueError) as exc:
+        raise ConfigError(f"timezone {timezone!r} ist keine bekannte IANA-Zone") from exc
+
     return Config(
         path=path,
         tenant_id=_text(raw, "tenant_id"),
@@ -114,6 +124,6 @@ def load_config(path: Path) -> Config:
         calendars=calendars,
         plans=_mapping(planner.get("plans", {}), "planner.plans"),
         assignees=_mapping(planner.get("assignees", {}), "planner.assignees"),
-        timezone=raw.get("timezone", "Europe/Berlin"),
+        timezone=timezone,
         max_body_chars=max_body,
     )

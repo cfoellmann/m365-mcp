@@ -73,3 +73,9 @@ def test_invalid_configs(tmp_path, old, new, match):
 def test_max_body_chars_must_be_positive(tmp_path):
     with pytest.raises(ConfigError, match="max_body_chars"):
         load_config(write(tmp_path, "max_body_chars = 0\n" + VALID))
+
+
+@pytest.mark.parametrize("value", ["5", '"Mars/Olympus"', '""'])
+def test_invalid_timezone(tmp_path, value):
+    with pytest.raises(ConfigError, match="timezone"):
+        load_config(write(tmp_path, f"timezone = {value}\n" + VALID))
