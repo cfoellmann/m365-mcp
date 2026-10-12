@@ -19,7 +19,7 @@ m365-mcp = "m365_mcp.cli:main"
 dev = ["pytest>=9", "ruff>=0.16", "tzdata"]
 
 [build-system]
-requires = ["uv_build>=0.12,<0.13"]
+requires = ["uv_build>=0.13,<0.14"]
 build-backend = "uv_build"
 
 [tool.ruff]
