@@ -33,13 +33,16 @@ SCOPES = [
 def ensure_owner(directory: Path) -> None:
     if os.name != "posix":
         return
-    owner = directory.stat().st_uid
-    if owner != os.geteuid():
+    st = directory.stat()
+    if st.st_uid != os.geteuid():
         raise ConfigError(
-            f"{directory} gehört UID {owner}, der Prozess läuft als UID {os.geteuid()}. "
+            f"{directory} gehört UID {st.st_uid}, der Prozess läuft als UID {os.geteuid()}. "
             "Als Eigentümer starten (z. B. sudo -u hermes …), sonst gehört der Token-Cache danach "
             "dem falschen Benutzer."
         )
+    # Wer im Verzeichnis schreiben darf, kann den Token-Cache austauschen oder umlenken.
+    if st.st_mode & 0o022:
+        raise ConfigError(f"{directory} ist für Gruppe/andere schreibbar; chmod 0700 {directory}")
 
 
 @contextmanager
@@ -79,10 +82,11 @@ def save_cache(cfg: Config, cache: msal.SerializableTokenCache) -> None:
     if not cache.has_state_changed:
         return
     tmp = cfg.token_cache.with_name(cfg.token_cache.name + ".tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    # Eine liegengebliebene .tmp (auch ein Symlink) wird entfernt, nicht beschrieben: neu anlegen
+    # mit O_EXCL garantiert eigene Datei mit Modus 0600.
+    tmp.unlink(missing_ok=True)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
     try:
-        if hasattr(os, "fchmod"):
-            os.fchmod(fd, 0o600)  # eine liegengebliebene .tmp behielte sonst ihren alten Modus
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(cache.serialize())
             fh.flush()

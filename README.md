@@ -24,7 +24,8 @@ M365-Benutzer.
    `Calendars.ReadWrite.Shared`, `Tasks.ReadWrite`, Admin-Consent; Enterprise App mit
    „Zuweisung erforderlich“ und nur dem Agenten-Benutzer zugewiesen.
 2. `config.toml` (Beispiel unten) in einen Ordner, der nur dem ausführenden Benutzer gehört
-   (`0700`). Token-Cache und Lock entstehen daneben.
+   (`0700`). Token-Cache und Lock entstehen daneben. `login`/`serve`/`check` brechen ab, wenn der
+   Ordner einem anderen Benutzer gehört oder für Gruppe/andere schreibbar ist.
 3. `m365-mcp login --config config.toml` (Device Code), dann `m365-mcp check --config config.toml`.
 4. Im MCP-Client: `m365-mcp serve --config config.toml` als stdio-Server.
 

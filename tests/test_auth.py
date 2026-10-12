@@ -162,6 +162,39 @@ def test_ensure_owner_rejects_foreign_directory(tmp_path, monkeypatch):
 
 
 @posix_only
+def test_ensure_owner_rejects_writable_by_others(tmp_path):
+    os.chmod(tmp_path, 0o770)
+    with pytest.raises(ConfigError, match="0700"):
+        ensure_owner(tmp_path)
+    os.chmod(tmp_path, 0o750)
+    ensure_owner(tmp_path)  # lesbar für die Gruppe genügt nicht für einen Angriff auf die Datei
+
+
+def test_save_cache_replaces_stale_tmp(cfg):
+    tmp = cfg.token_cache.with_name(cfg.token_cache.name + ".tmp")
+    tmp.write_text("alt", encoding="utf-8")
+    cache = load_cache(cfg)
+    cache.deserialize('{"AccessToken": {}}')
+    cache.has_state_changed = True
+    save_cache(cfg, cache)
+    assert "AccessToken" in cfg.token_cache.read_text(encoding="utf-8")
+    assert not tmp.exists()
+
+
+@posix_only
+def test_save_cache_does_not_follow_tmp_symlink(cfg, tmp_path):
+    target = tmp_path / "fremd"
+    target.write_text("", encoding="utf-8")
+    cfg.token_cache.with_name(cfg.token_cache.name + ".tmp").symlink_to(target)
+    cache = load_cache(cfg)
+    cache.deserialize('{"AccessToken": {}}')
+    cache.has_state_changed = True
+    save_cache(cfg, cache)
+    assert target.read_text(encoding="utf-8") == ""
+    assert not cfg.token_cache.is_symlink()
+
+
+@posix_only
 def test_lock_serializes_writers(cfg):
     import fcntl
 
