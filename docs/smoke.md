@@ -14,5 +14,6 @@ und das Ergebnis im Postfach/Kalender eines Menschen prüfen.
 7. Termin im eigenen Kalender mit externem Teilnehmer → abgelehnt.
 8. To Do: Liste anzeigen, Aufgabe mit Fälligkeit anlegen (Datum stimmt in To Do, kein Vortag) und erledigen. Zusätzlich prüfen: Erscheint eine Liste,
    die ein Mensch mit dem Agenten geteilt hat, in `todo_lists`? (Offener Punkt der Spec.)
-9. Planner: Aufgabe im freigegebenen Plan anlegen, zuweisen, erledigen; Aufgabe aus einem anderen
+9. Planner: Aufgabe im freigegebenen Plan mit Fälligkeit anlegen (Datum stimmt in Planner, kein
+   Vortag), zuweisen, erledigen; Aufgabe aus einem anderen
    Plan ändern → abgelehnt.

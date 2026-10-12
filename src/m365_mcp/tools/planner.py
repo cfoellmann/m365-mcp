@@ -1,7 +1,9 @@
 """Planner: nur Pläne aus [planner.plans]. Auch Aufgaben-IDs werden gegen den Plan geprüft."""
 
+import datetime
 from collections.abc import Iterator
 from contextlib import contextmanager
+from zoneinfo import ZoneInfo
 
 from m365_mcp.context import Ctx
 from m365_mcp.errors import GraphError, PolicyError
@@ -23,6 +25,25 @@ def _explain_403(ctx: Ctx) -> Iterator[None]:
         raise
 
 
+def _due_to_graph(ctx: Ctx, due: str) -> str:
+    """Planner kennt nur einen Zeitpunkt: Mitternacht des Tages in der konfigurierten Zone, als UTC."""
+    local = datetime.datetime.combine(datetime.date.fromisoformat(parse_due(due)), datetime.time())
+    utc = local.replace(tzinfo=ZoneInfo(ctx.cfg.timezone)).astimezone(datetime.UTC)
+    return utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _due_from_graph(ctx: Ctx, raw: str | None) -> str | None:
+    if not raw:
+        return None
+    try:
+        moment = datetime.datetime.fromisoformat(raw)
+    except ValueError:
+        return raw[:10]
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=datetime.UTC)
+    return moment.astimezone(ZoneInfo(ctx.cfg.timezone)).date().isoformat()
+
+
 def _assignee_keys(ctx: Ctx, assignments: dict) -> list[str]:
     reverse = {v: k for k, v in ctx.cfg.assignees.items()}
     return [reverse.get(uid, uid) for uid in assignments or {}]
@@ -34,7 +55,7 @@ def _task(ctx: Ctx, t: dict) -> dict:
         "title": t.get("title"),
         "bucket_id": t.get("bucketId"),
         "percent_complete": t.get("percentComplete"),
-        "due": (t.get("dueDateTime") or "")[:10] or None,
+        "due": _due_from_graph(ctx, t.get("dueDateTime")),
         "assignees": _assignee_keys(ctx, t.get("assignments")),
     }
 
@@ -87,7 +108,7 @@ def planner_create(
     if bucket_id:
         payload["bucketId"] = bucket_id
     if due is not None:
-        payload["dueDateTime"] = f"{parse_due(due)}T00:00:00Z"
+        payload["dueDateTime"] = _due_to_graph(ctx, due)
     if assignees:
         payload["assignments"] = _resolve_assignees(ctx, assignees)
     with _explain_403(ctx):
@@ -108,7 +129,7 @@ def planner_update(
     if title is not None:
         payload["title"] = title
     if due is not None:
-        payload["dueDateTime"] = f"{parse_due(due)}T00:00:00Z"
+        payload["dueDateTime"] = _due_to_graph(ctx, due)
     if bucket_id is not None:
         payload["bucketId"] = bucket_id
     if not payload:
