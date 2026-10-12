@@ -52,6 +52,8 @@ def test_missing_file(tmp_path):
     "old,new,match",
     [
         ('tenant_id = "tid"', 'tenant_id = ""', "tenant_id"),
+        ('tenant_id = "tid"', 'tenant_id = "tid/../x"', "tenant_id"),
+        ('tenant_id = "tid"', 'tenant_id = "tid?x"', "tenant_id"),
         ('internal_domains = ["Example.org"]', "internal_domains = []", "internal_domains"),
         ('reply_to = "chef@example.org"', 'reply_to = "chef@extern.example"', "intern"),
         ('cc = ["chef@example.org"]', 'cc = ["x@extern.example"]', "intern"),
@@ -79,3 +81,15 @@ def test_max_body_chars_must_be_positive(tmp_path):
 def test_invalid_timezone(tmp_path, value):
     with pytest.raises(ConfigError, match="timezone"):
         load_config(write(tmp_path, f"timezone = {value}\n" + VALID))
+
+
+def test_client_id_with_path_characters_rejected(tmp_path):
+    assert 'client_id = "' in VALID
+    text = VALID.replace('client_id = "', 'client_id = "x/', 1)
+    with pytest.raises(ConfigError, match="client_id"):
+        load_config(write(tmp_path, text))
+
+
+def test_tenant_id_as_domain_allowed(tmp_path):
+    cfg = load_config(write(tmp_path, VALID.replace('tenant_id = "tid"', 'tenant_id = "contoso.onmicrosoft.com"')))
+    assert cfg.tenant_id == "contoso.onmicrosoft.com"

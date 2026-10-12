@@ -111,3 +111,13 @@ def test_keys_ignore_case_and_whitespace(cfg):
     assert calendar_root(cfg, " SELF ") == "/me"
     with pytest.raises(PolicyError, match="'Andere'"):
         plan_id(cfg, "Andere")
+
+
+def test_calendar_root_quotes_address(cfg):
+    import dataclasses
+
+    from m365_mcp.policy import calendar_root
+
+    cfg = dataclasses.replace(cfg, calendars={"x": "a/b?c#d@example.org"})
+    assert calendar_root(cfg, "x") == "/users/a%2Fb%3Fc%23d@example.org"
+    assert calendar_root(cfg, "self") == "/me"

@@ -10,6 +10,8 @@ from m365_mcp.errors import ConfigError
 
 _KEY = re.compile(r"^[a-z0-9]+\Z")
 _ADDRESS = re.compile(r"^[^@\s]+@[^@\s]+\Z")
+# Landen in der Authority-URL bzw. als Client-ID bei MSAL: GUID oder Domänenname, keine Pfadzeichen.
+_IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]*\Z")
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,13 @@ def _text(table: dict, key: str, where: str = "") -> str:
     if not isinstance(value, str) or not value.strip():
         raise ConfigError(f"{where}{key} fehlt oder ist leer")
     return value.strip()
+
+
+def _ident(table: dict, key: str) -> str:
+    value = _text(table, key)
+    if not _IDENT.match(value) or ".." in value:
+        raise ConfigError(f"{key} {value!r} ungültig: erwartet GUID oder Domänenname")
+    return value
 
 
 def _internal_address(value: str, domains: tuple[str, ...], where: str) -> str:
@@ -115,8 +124,8 @@ def load_config(path: Path) -> Config:
 
     return Config(
         path=path,
-        tenant_id=_text(raw, "tenant_id"),
-        client_id=_text(raw, "client_id"),
+        tenant_id=_ident(raw, "tenant_id"),
+        client_id=_ident(raw, "client_id"),
         account=_internal_address(_text(raw, "account"), domains, "account"),
         internal_domains=domains,
         reply_to=reply_to,

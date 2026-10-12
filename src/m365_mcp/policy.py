@@ -1,6 +1,7 @@
 """Im Code erzwungene Richtlinien. Reine Funktionen ohne I/O."""
 
 from collections.abc import Iterable
+from urllib.parse import quote
 
 from m365_mcp.config import Config
 from m365_mcp.errors import PolicyError
@@ -75,7 +76,7 @@ def calendar_address(cfg: Config, key: str) -> str:
 
 def calendar_root(cfg: Config, key: str) -> str:
     address = calendar_address(cfg, key)
-    return "/me" if config_key(key) == "self" else f"/users/{address}"
+    return "/me" if config_key(key) == "self" else f"/users/{quote(address, safe='@')}"
 
 
 def plan_id(cfg: Config, key: str) -> str:
