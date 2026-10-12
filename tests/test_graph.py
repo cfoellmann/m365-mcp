@@ -215,3 +215,31 @@ def test_get_all_overshoot_on_later_page_is_truncated(router):
     assert [i["id"] for i in items] == ["1", "2", "3"]
     assert truncated is True
     assert len(router.calls) == 2
+
+
+def test_get_all_rejects_foreign_next_link(router):
+    router.add("GET", "/me/messages", json_body={"value": [{"id": "1"}], "@odata.nextLink": "https://evil.example/x"})
+    with pytest.raises(GraphError, match="foreign_next_link"):
+        client(router).get_all("/me/messages")
+    assert len(router.calls) == 1
+
+
+def test_delete_404_after_5xx_retry_counts_as_done(router):
+    router.add("DELETE", "/me/events/e1", status=503)
+    router.add("DELETE", "/me/events/e1", status=404, json_body={"error": {"code": "ErrorItemNotFound"}})
+    assert client(router).delete("/me/events/e1") is None
+
+
+def test_delete_404_without_retry_is_error(router):
+    router.add("DELETE", "/me/events/e1", status=404, json_body={"error": {"code": "ErrorItemNotFound"}})
+    with pytest.raises(GraphError) as exc:
+        client(router).delete("/me/events/e1")
+    assert exc.value.status == 404
+
+
+def test_non_json_success_body_is_graph_error():
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, text="<html>Proxy</html>"))
+    graph = GraphClient(lambda force_refresh=False: "tok", transport=transport, sleep=lambda s: None)
+    with pytest.raises(GraphError) as exc:
+        graph.get("/me")
+    assert exc.value.code == "invalid_response"

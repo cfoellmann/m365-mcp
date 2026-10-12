@@ -62,7 +62,7 @@ class GraphClient:
         retry_on = _RETRY if method != "POST" else {429}
         start = self._clock()
         attempt = 0
-        force_refresh = refreshed = False
+        force_refresh = refreshed = server_retry = False
         while True:
             remaining = _BUDGET - (self._clock() - start)
             merged = {"Authorization": f"Bearer {self._token(force_refresh=force_refresh)}", **(headers or {})}
@@ -83,16 +83,23 @@ class GraphClient:
                 if self._clock() - start + wait < _BUDGET:
                     self._sleep(wait)
                     attempt += 1
+                    server_retry = server_retry or response.status_code != 429
                     continue
             break
         if response.status_code == 401:
             raise ReauthRequired(_error(response)[0])
+        # Nach 503/504 kann das erste DELETE serverseitig gegriffen haben; 404 heißt dann „erledigt“.
+        if method == "DELETE" and response.status_code == 404 and server_retry:
+            return None
         if response.status_code >= 400:
             code, message = _error(response)
             raise GraphError(response.status_code, code, message)
         if response.status_code == 204 or not response.content:
             return None
-        return response.json()
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise GraphError(response.status_code, "invalid_response", response.text[:200]) from exc
 
     def get(self, path, params=None, headers=None) -> dict:
         return self.request("GET", path, params=params, headers=headers) or {}
@@ -106,6 +113,9 @@ class GraphClient:
             next_link = page.get("@odata.nextLink")
             if len(items) >= limit or not next_link:
                 return items[:limit], len(items) > limit or bool(next_link)
+            # nextLink stammt aus der Antwort und bekommt das Bearer-Token: nur zu Graph folgen.
+            if not next_link.startswith(GRAPH_BASE + "/"):
+                raise GraphError(0, "foreign_next_link", next_link[:200])
             page = self.get(next_link, headers=headers)
 
     def post(self, path, json=None, headers=None):
