@@ -60,5 +60,5 @@ def ctx(cfg, router):
     from m365_mcp.context import Ctx
     from m365_mcp.graph import GraphClient
 
-    graph = GraphClient(lambda: "tok", transport=httpx.MockTransport(router), sleep=lambda s: None)
+    graph = GraphClient(lambda force_refresh=False: "tok", transport=httpx.MockTransport(router), sleep=lambda s: None)
     return Ctx(cfg=cfg, graph=graph)

@@ -23,8 +23,11 @@ class FakeApp:
     def get_accounts(self, username=None):
         return [a for a in self.accounts if username is None or a["username"] == username]
 
-    def acquire_token_silent_with_error(self, scopes, account):
+    forced: list = []
+
+    def acquire_token_silent_with_error(self, scopes, account, force_refresh=False):
         assert scopes == SCOPES
+        self.forced.append(force_refresh)
         if "access_token" in self.result:
             self.cache.deserialize('{"AccessToken": {"x": {"secret": "neu"}}}')
             self.cache.has_state_changed = True  # wie bei einem echten Refresh
@@ -56,6 +59,14 @@ def test_token_provider_returns_token_and_saves_cache(cfg):
     provider = TokenProvider(cfg, app_factory=factory(result={"access_token": "at"}))
     assert provider() == "at"
     assert "neu" in cfg.token_cache.read_text(encoding="utf-8")
+
+
+def test_token_provider_passes_force_refresh(cfg):
+    app = factory(result={"access_token": "at"}, forced=[])
+    provider = TokenProvider(cfg, app_factory=app)
+    provider()
+    provider(force_refresh=True)
+    assert app.forced == [False, True]
 
 
 def test_token_provider_builds_app_once(cfg):

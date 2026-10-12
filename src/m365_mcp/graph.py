@@ -1,5 +1,6 @@
 """Dünner Graph-Client: Bearer-Token, Retry bei 429/503/504, Fehlerzuordnung."""
 
+import math
 import time
 from collections.abc import Callable
 from urllib.parse import quote
@@ -11,6 +12,9 @@ from m365_mcp.errors import GraphError, ReauthRequired
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 _RETRY = {429, 503, 504}
 _MAX_WAIT = 30.0
+_TIMEOUT = 30.0
+# Gesamtzeit pro Aufruf: viele MCP-Clients brechen nach ~60 s ab, das Ergebnis ginge dann verloren.
+_BUDGET = 50.0
 
 
 def quote_id(value: str) -> str:
@@ -19,46 +23,67 @@ def quote_id(value: str) -> str:
 
 def _retry_after(response: httpx.Response) -> float:
     try:
-        return min(float(response.headers.get("Retry-After", "2")), _MAX_WAIT)
+        wait = float(response.headers.get("Retry-After", "2"))
     except ValueError:
         return 2.0
+    if not math.isfinite(wait):
+        return 2.0
+    return min(max(wait, 0.0), _MAX_WAIT)
 
 
 def _error(response: httpx.Response) -> tuple[str, str]:
     try:
         err = response.json()["error"]
         return err.get("code", "unknown"), err.get("message", "")
-    except (ValueError, KeyError, TypeError):
+    except (ValueError, KeyError, TypeError, AttributeError):
         return "unknown", response.text[:200]
 
 
 class GraphClient:
     def __init__(
         self,
-        token: Callable[[], str],
+        token: Callable[..., str],
         *,
         transport: httpx.BaseTransport | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        clock: Callable[[], float] = time.monotonic,
         max_retries: int = 3,
     ) -> None:
+        """`token(force_refresh=False)` liefert ein Access-Token; mit True wird es neu geholt."""
         self._token = token
         self._sleep = sleep
+        self._clock = clock
         self._max_retries = max_retries
-        self._http = httpx.Client(base_url=GRAPH_BASE, transport=transport, timeout=30.0)
+        self._http = httpx.Client(base_url=GRAPH_BASE, transport=transport, timeout=_TIMEOUT)
 
     def request(self, method, path, *, params=None, json=None, headers=None):
         # POST (sendMail, send, Anlegen) ist nicht idempotent: 503/504 können heißen, dass Graph den
         # Aufruf trotzdem ausgeführt hat. Nur 429 sagt sicher „nicht verarbeitet“.
         retry_on = _RETRY if method != "POST" else {429}
-        for attempt in range(self._max_retries + 1):
-            merged = {"Authorization": f"Bearer {self._token()}", **(headers or {})}
+        start = self._clock()
+        attempt = 0
+        force_refresh = refreshed = False
+        while True:
+            remaining = _BUDGET - (self._clock() - start)
+            merged = {"Authorization": f"Bearer {self._token(force_refresh=force_refresh)}", **(headers or {})}
+            force_refresh = False
             try:
-                response = self._http.request(method, path, params=params, json=json, headers=merged)
+                response = self._http.request(
+                    method, path, params=params, json=json, headers=merged, timeout=min(_TIMEOUT, max(remaining, 1.0))
+                )
             except httpx.TransportError as exc:
                 raise GraphError(0, "transport", type(exc).__name__) from exc
-            if response.status_code in retry_on and attempt < self._max_retries:
-                self._sleep(_retry_after(response))
+            # 401 heißt „Token abgelehnt“, der Aufruf wurde nicht ausgeführt: einmal mit frisch
+            # geholtem Token wiederholen (auch POST), bevor eine Neuanmeldung verlangt wird.
+            if response.status_code == 401 and not refreshed:
+                force_refresh = refreshed = True
                 continue
+            if response.status_code in retry_on and attempt < self._max_retries:
+                wait = _retry_after(response)
+                if self._clock() - start + wait < _BUDGET:
+                    self._sleep(wait)
+                    attempt += 1
+                    continue
             break
         if response.status_code == 401:
             raise ReauthRequired(_error(response)[0])

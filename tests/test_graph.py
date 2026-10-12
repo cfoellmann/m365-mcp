@@ -5,11 +5,13 @@ from m365_mcp.errors import GraphError, ReauthRequired
 from m365_mcp.graph import GraphClient, quote_id
 
 
-def client(router, sleeps=None):
+def client(router, sleeps=None, token=None):
+    sleeps = sleeps if sleeps is not None else []
     return GraphClient(
-        lambda: "tok",
+        token or (lambda force_refresh=False: "tok"),
         transport=httpx.MockTransport(router),
-        sleep=(sleeps.append if sleeps is not None else (lambda s: None)),
+        sleep=sleeps.append,
+        clock=lambda: sum(sleeps),  # Zeit vergeht nur durch Warten
     )
 
 
@@ -55,7 +57,7 @@ def test_transport_error_is_graph_error():
     def boom(request):
         raise httpx.ConnectError("weg", request=request)
 
-    graph = GraphClient(lambda: "tok", transport=httpx.MockTransport(boom), sleep=lambda s: None)
+    graph = GraphClient(lambda force_refresh=False: "tok", transport=httpx.MockTransport(boom), sleep=lambda s: None)
     with pytest.raises(GraphError, match="Ergebnis unklar") as exc:
         graph.get("/me")
     assert exc.value.code == "transport"
@@ -73,6 +75,63 @@ def test_401_means_reauth(router):
     router.add("GET", "/me", status=401, json_body={"error": {"code": "InvalidAuthenticationToken"}})
     with pytest.raises(ReauthRequired):
         client(router).get("/me")
+    assert len(router.calls) == 2
+
+
+def test_401_retries_once_with_forced_refresh(router):
+    router.add("GET", "/me", status=401, json_body={"error": {"code": "InvalidAuthenticationToken"}})
+    router.add("GET", "/me", json_body={"ok": True})
+    forced: list[bool] = []
+
+    def token(force_refresh=False):
+        forced.append(force_refresh)
+        return "neu" if force_refresh else "alt"
+
+    assert client(router, token=token).get("/me") == {"ok": True}
+    assert forced == [False, True]
+    assert router.calls[1][3].headers["Authorization"] == "Bearer neu"
+
+
+def test_401_refresh_also_for_post(router):
+    router.add("POST", "/me/sendMail", status=401, json_body={"error": {"code": "InvalidAuthenticationToken"}})
+    router.add("POST", "/me/sendMail", status=202)
+    client(router).post("/me/sendMail", json={})
+    assert len(router.calls) == 2
+
+
+def test_error_body_with_string_error_is_graph_error(router):
+    router.add("GET", "/me", status=400, json_body={"error": "invalid_request"})
+    with pytest.raises(GraphError) as exc:
+        client(router).get("/me")
+    assert (exc.value.status, exc.value.code) == (400, "unknown")
+
+
+@pytest.mark.parametrize(("header", "expected"), [("-5", 0.0), ("nan", 2.0), ("inf", 2.0), ("abc", 2.0)])
+def test_retry_after_invalid_values(router, header, expected):
+    router.add("GET", "/me", status=429, headers={"Retry-After": header})
+    router.add("GET", "/me", json_body={})
+    sleeps: list[float] = []
+    client(router, sleeps).get("/me")
+    assert sleeps == [expected]
+
+
+def test_retries_stop_at_time_budget(router):
+    router.add("GET", "/me", status=429, headers={"Retry-After": "30"})
+    sleeps: list[float] = []
+    with pytest.raises(GraphError) as exc:
+        client(router, sleeps).get("/me")
+    assert exc.value.status == 429
+    assert sleeps == [30.0]  # ein zweites Warten sprengte das Budget
+    assert len(router.calls) == 2
+
+
+def test_request_timeout_shrinks_with_budget(router):
+    router.add("GET", "/me", status=429, headers={"Retry-After": "30"})
+    router.add("GET", "/me", json_body={})
+    client(router).get("/me")
+    first, second = (c[3].extensions["timeout"]["read"] for c in router.calls)
+    assert first == 30.0
+    assert second < first
 
 
 def test_error_body_is_mapped(router):

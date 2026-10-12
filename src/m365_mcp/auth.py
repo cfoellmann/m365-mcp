@@ -113,7 +113,7 @@ class TokenProvider:
         self._cache = msal.SerializableTokenCache()
         self._app = None
 
-    def __call__(self) -> str:
+    def __call__(self, force_refresh: bool = False) -> str:
         with cache_lock(self._cfg):
             reload_cache(self._cfg, self._cache)
             if self._app is None:
@@ -121,7 +121,7 @@ class TokenProvider:
             accounts = self._app.get_accounts(username=self._cfg.account)
             if not accounts:
                 raise ReauthRequired(f"kein Konto {self._cfg.account} im Token-Cache")
-            result = self._app.acquire_token_silent_with_error(SCOPES, account=accounts[0])
+            result = self._app.acquire_token_silent_with_error(SCOPES, account=accounts[0], force_refresh=force_refresh)
             save_cache(self._cfg, self._cache)
         if not result or "access_token" not in result:
             raise ReauthRequired((result or {}).get("error", "kein Token"))
