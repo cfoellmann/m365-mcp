@@ -35,6 +35,15 @@ def test_mail_list_marks_source(ctx, router):
     assert params["$top"] == "50"
 
 
+def test_mail_source_external_if_sender_differs_from_from(ctx, router):
+    spoofed = msg("1", "chef@example.org") | {"sender": {"emailAddress": {"address": "x@extern.example"}}}
+    same = msg("2", "nina@example.org") | {"sender": {"emailAddress": {"address": "nina@example.org"}}}
+    router.add("GET", "/me/mailFolders/inbox/messages", json_body={"value": [spoofed, same]})
+    out = mail_list(ctx)
+    assert [m["source"] for m in out["messages"]] == ["external", "internal"]
+    assert "sender" in router.calls[0][3].url.params["$select"].split(",")
+
+
 def test_mail_get_truncates_and_requests_text(ctx, router, cfg):
     body = "x" * (cfg.max_body_chars + 10)
     router.add(

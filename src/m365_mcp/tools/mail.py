@@ -12,8 +12,8 @@ from m365_mcp.policy import (
 )
 
 _TEXT = {"Prefer": 'outlook.body-content-type="text"'}
-_LIST_SELECT = "id,subject,from,receivedDateTime,isRead,bodyPreview"
-_GET_SELECT = "id,subject,from,toRecipients,ccRecipients,receivedDateTime,isRead,body,conversationId"
+_LIST_SELECT = "id,subject,from,sender,receivedDateTime,isRead,bodyPreview"
+_GET_SELECT = "id,subject,from,sender,toRecipients,ccRecipients,receivedDateTime,isRead,body,conversationId"
 _MOVE_ROOTS = ("inbox", "archive", "deleteditems", "junkemail")
 
 
@@ -23,12 +23,20 @@ def _truncate(text: str, limit: int) -> str:
     return text[:limit] + f"\n[… gekürzt, {len(text) - limit} Zeichen]"
 
 
+def _address(message: dict, field: str) -> str:
+    return ((message.get(field) or {}).get("emailAddress") or {}).get("address", "")
+
+
 def _sender(message: dict) -> str:
-    return ((message.get("from") or {}).get("emailAddress") or {}).get("address", "")
+    return _address(message, "from")
 
 
 def _source(ctx: Ctx, message: dict) -> str:
-    return "internal" if is_internal(_sender(message), ctx.cfg.internal_domains) else "external"
+    # from allein ist frei setzbar; weicht der tatsächliche Absender (sender) ab, gilt die Mail als extern.
+    addresses = [_sender(message)]
+    if _address(message, "sender"):
+        addresses.append(_address(message, "sender"))
+    return "internal" if all(is_internal(a, ctx.cfg.internal_domains) for a in addresses) else "external"
 
 
 def mail_list(ctx: Ctx, folder: str = "inbox", unread_only: bool = False, top: int = 20) -> dict:
