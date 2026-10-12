@@ -51,6 +51,21 @@ familie = "<plan-id>"
 mensch = "<entra-object-id>"
 ```
 
+## Update-Hinweise
+
+**0.1.4:** `login`, `serve` und `check` brechen jetzt ab, wenn der Ordner der `config.toml` für
+Gruppe oder andere schreibbar ist (vorher wurde nur der Eigentümer geprüft). Vor dem Update auf dem
+Server prüfen und ggf. korrigieren:
+
+```sh
+ls -ld /pfad/zum/config-ordner   # erwartet drwx------
+chmod 0700 /pfad/zum/config-ordner
+```
+
+Außerdem müssen `tenant_id` und `client_id` eine GUID oder ein Domänenname sein. Planner-Fälligkeiten
+werden jetzt als Mitternacht in `timezone` gespeichert (in Graph z. B. `2026-10-09T22:00:00Z` für
+den 10.10. in Europe/Berlin); angezeigt wird weiterhin das richtige Datum.
+
 ## Exit-Codes
 
 `0` ok, `1` Fehler, `2` Aufruffehler (argparse), `3` Neuanmeldung nötig (`m365-mcp login`).

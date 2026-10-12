@@ -437,7 +437,7 @@ wheels = [
 
 [[package]]
 name = "m365-mcp"
-version = "0.1.3"
+version = "0.1.4"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
