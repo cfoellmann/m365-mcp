@@ -53,6 +53,8 @@ mensch = "<entra-object-id>"
 
 ## Update-Hinweise
 
+**0.1.5:** Antworten auf HTML-Mails (z. B. Planner-Benachrichtigungen) verloren Zeilenumbrüche, und Text in spitzen Klammern (`<tag>`) wurde verworfen – Graph deutete den Antworttext dort als HTML. `mail_reply` setzt den Body jetzt selbst. Kein Eingriff beim Update nötig.
+
 **0.1.4:** `login`, `serve` und `check` brechen jetzt ab, wenn der Ordner der `config.toml` für
 Gruppe oder andere schreibbar ist (vorher wurde nur der Eigentümer geprüft). Vor dem Update auf dem
 Server prüfen und ggf. korrigieren:

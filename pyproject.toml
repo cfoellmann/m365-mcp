@@ -1,6 +1,6 @@
 [project]
 name = "m365-mcp"
-version = "0.1.4"
+version = "0.1.5"
 description = "Schmaler MCP-Server für Microsoft 365 (Mail, Kalender, To Do, Planner) mit im Code erzwungenen Richtlinien"
 readme = "README.md"
 requires-python = ">=3.13"
