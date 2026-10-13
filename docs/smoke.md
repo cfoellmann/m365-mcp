@@ -7,9 +7,10 @@ und das Ergebnis im Postfach/Kalender eines Menschen prüfen.
 2. Mail an eine externe Adresse → kommt an mit Reply-To und CC laut `[external_mail]`;
    Werkzeugantwort `policy_applied: ["reply_to", "cc"]`.
 3. Externe Mail an den Agenten → wird abgewiesen (NDR), sofern das Postfach nur interne Absender annimmt.
-4. Antwort auf eine interne Mail → `policy_applied: []`. Antworttext mit Zeilenumbrüchen und `<`/`>`
-   schreiben: kommen Umbrüche und Zeichen unverändert an? (Graph fügt `comment` in den Body der
-   Originalmail ein, bei HTML-Mails ungeklärt.)
+4. Antwort auf eine interne Mail → `policy_applied: []`. Antworttext mit Zeilenumbrüchen und
+   `<tag>` schreiben; Umbrüche und Zeichen müssen unverändert ankommen. Beide Formate prüfen:
+   einmal auf eine in Outlook geschriebene Mail (Text) und einmal auf eine HTML-Mail
+   (z. B. eine Planner-Benachrichtigung) – bei HTML gingen Umbrüche und `<tag>` früher verloren.
 5. Termin ohne Teilnehmer in einem freigegebenen Kalender anlegen, ändern, löschen → klappt.
    „Was steht morgen an?“ liefert genau die Termine des Tages (Zeitzone des Abfragefensters).
 6. Termin mit Teilnehmern in einem freigegebenen Kalender ändern → abgelehnt.

@@ -1,5 +1,8 @@
 """Mail-Werkzeuge. Nur das eigene Postfach des Agenten (/me)."""
 
+import html
+import re
+
 from m365_mcp.context import Ctx
 from m365_mcp.errors import GraphError, M365Error, PolicyError
 from m365_mcp.graph import quote_id
@@ -15,6 +18,7 @@ _TEXT = {"Prefer": 'outlook.body-content-type="text"'}
 _LIST_SELECT = "id,subject,from,sender,receivedDateTime,isRead,bodyPreview"
 _GET_SELECT = "id,subject,from,sender,toRecipients,ccRecipients,receivedDateTime,isRead,body,conversationId"
 _MOVE_ROOTS = ("inbox", "archive", "deleteditems", "junkemail")
+_BODY_TAG = re.compile(r"<body[^>]*>", re.IGNORECASE)
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -105,10 +109,29 @@ def mail_send(
     return {"sent": True, "policy_applied": applied}
 
 
+def _reply_body(draft: dict, text: str) -> dict:
+    """Antworttext vor den zitierten Original-Body setzen – im Format des Entwurfs.
+
+    Graph deutet `comment` bei HTML-Mails als HTML: Umbrüche gehen verloren und `<…>` wird
+    als Tag verworfen. Deshalb den Body selbst setzen statt `comment` zu übergeben.
+    """
+    body = draft.get("body") or {}
+    content = body.get("content") or ""
+    if (body.get("contentType") or "text").lower() != "html":
+        return {"contentType": "Text", "content": f"{text}\n\n{content}"}
+    prefix = "<div>" + html.escape(text).replace("\n", "<br>") + "</div><br>"
+    match = _BODY_TAG.search(content)
+    if match:
+        content = content[: match.end()] + prefix + content[match.end() :]
+    else:
+        content = prefix + content
+    return {"contentType": "HTML", "content": content}
+
+
 def mail_reply(ctx: Ctx, message_id: str, body: str, reply_all: bool = False) -> dict:
     """Auf eine Mail antworten. Empfänger bestimmt Graph; bei externen setzt der Server Reply-To und CC."""
     action = "createReplyAll" if reply_all else "createReply"
-    draft = ctx.graph.post(f"/me/messages/{quote_id(message_id)}/{action}", json={"comment": body})
+    draft = ctx.graph.post(f"/me/messages/{quote_id(message_id)}/{action}", json={})
     draft_path = f"/me/messages/{quote_id(draft['id'])}"
     try:
         to_ = addresses_of(draft.get("toRecipients"))
@@ -117,11 +140,11 @@ def mail_reply(ctx: Ctx, message_id: str, body: str, reply_all: bool = False) ->
         if not to_ and not cc_:
             raise PolicyError("die Antwort hätte keine Empfänger")
         new_cc, reply_to, applied = apply_external_mail_policy(ctx.cfg, to_, cc_, bcc_)
+        patch: dict = {"body": _reply_body(draft, body)}
         if applied:
-            ctx.graph.patch(
-                draft_path,
-                json={"ccRecipients": recipients(new_cc), "replyTo": recipients(reply_to)},
-            )
+            patch["ccRecipients"] = recipients(new_cc)
+            patch["replyTo"] = recipients(reply_to)
+        ctx.graph.patch(draft_path, json=patch)
         ctx.graph.post(f"{draft_path}/send")
     except M365Error:
         try:

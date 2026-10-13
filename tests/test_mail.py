@@ -93,6 +93,7 @@ def test_reply_to_external_sets_policy_before_send(ctx, router):
             "id": "d1",
             "toRecipients": [{"emailAddress": {"address": "x@extern.example"}}],
             "ccRecipients": [],
+            "body": {"contentType": "text", "content": "Original"},
         },
     )
     router.add("PATCH", "/me/messages/d1", json_body={"id": "d1"})
@@ -104,26 +105,29 @@ def test_reply_to_external_sets_policy_before_send(ctx, router):
         ("PATCH", "/me/messages/d1"),
         ("POST", "/me/messages/d1/send"),
     ]
-    assert router.calls[0][2] == {"comment": "Danke"}
+    assert router.calls[0][2] == {}
     patch = router.calls[1][2]
+    assert patch["body"] == {"contentType": "Text", "content": "Danke\n\nOriginal"}
     assert patch["replyTo"] == [{"emailAddress": {"address": "chef@example.org"}}]
     assert {"emailAddress": {"address": "chef@example.org"}} in patch["ccRecipients"]
     assert out["policy_applied"] == ["reply_to", "cc"]
     assert not router.sent("POST", "/me/messages/m1/reply")
 
 
-def test_reply_all_internal_no_patch(ctx, router):
+def test_reply_all_internal_patches_only_body(ctx, router):
     router.add(
         "POST",
         "/me/messages/m1/createReplyAll",
         json_body={
             "id": "d1",
             "toRecipients": [{"emailAddress": {"address": "nina@example.org"}}],
+            "body": {"contentType": "text", "content": "Original"},
         },
     )
+    router.add("PATCH", "/me/messages/d1", json_body={"id": "d1"})
     router.add("POST", "/me/messages/d1/send", status=202)
     out = mail_reply(ctx, "m1", "Ok", reply_all=True)
-    assert not router.sent("PATCH", "/me/messages/d1")
+    assert list(router.sent("PATCH", "/me/messages/d1")[0][2]) == ["body"]
     assert out["policy_applied"] == []
 
 
@@ -191,3 +195,41 @@ def test_move_to_forbidden_wellknown(ctx, router, target):
     with pytest.raises(PolicyError, match="Zielordner"):
         mail_move(ctx, "m1", target)
     assert not router.sent("POST", "/me/messages/m1/move")
+
+
+def test_reply_to_html_original_keeps_line_breaks_and_angle_brackets(ctx, router):
+    router.add(
+        "POST",
+        "/me/messages/m1/createReply",
+        json_body={
+            "id": "d1",
+            "toRecipients": [{"emailAddress": {"address": "nina@example.org"}}],
+            "body": {"contentType": "html", "content": "<html><body><div>Original</div></body></html>"},
+        },
+    )
+    router.add("PATCH", "/me/messages/d1", json_body={"id": "d1"})
+    router.add("POST", "/me/messages/d1/send", status=202)
+    mail_reply(ctx, "m1", 'Zeile 1\nZeile 2: a < b\n<tag> & "Zitat"')
+    assert router.calls[0][2] == {}
+    body = router.calls[1][2]["body"]
+    assert body["contentType"] == "HTML"
+    assert "Zeile 1<br>Zeile 2: a &lt; b<br>&lt;tag&gt; &amp;" in body["content"]
+    assert "<div>Original</div>" in body["content"]
+
+
+def test_reply_to_text_original_keeps_plain_text(ctx, router):
+    router.add(
+        "POST",
+        "/me/messages/m1/createReply",
+        json_body={
+            "id": "d1",
+            "toRecipients": [{"emailAddress": {"address": "nina@example.org"}}],
+            "body": {"contentType": "text", "content": "Original"},
+        },
+    )
+    router.add("PATCH", "/me/messages/d1", json_body={"id": "d1"})
+    router.add("POST", "/me/messages/d1/send", status=202)
+    mail_reply(ctx, "m1", "Zeile 1\n<tag>")
+    body = router.calls[1][2]["body"]
+    assert body["contentType"] == "Text"
+    assert body["content"] == "Zeile 1\n<tag>\n\nOriginal"
